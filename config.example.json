@@ -1,0 +1,4 @@
+{
+    "whitelists": ["/etc/*", "/tmp/*"],
+    "blacklists": ["/etc/shadow"]
+}

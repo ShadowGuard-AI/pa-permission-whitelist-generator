@@ -30,7 +30,7 @@ def setup_argparse() -> argparse.ArgumentParser:
         argparse.ArgumentParser: The configured argument parser.
     """
     parser = argparse.ArgumentParser(
-        description="Generates a least-privilege permission whitelist based on observed application behavior."
+        description="Filters lines from a supplied behavior file against whitelist and blacklist patterns in a config file and writes the kept lines as allowed_paths. No monitoring or observation is performed."
     )
 
     parser.add_argument(
@@ -38,7 +38,7 @@ def setup_argparse() -> argparse.ArgumentParser:
         "--input",
         dest="input_file",
         required=True,
-        help="Path to the input file containing observed application behavior (e.g., system calls, file access).",
+        help="Path to the input file containing one behavior line (for example a file path) per line.",
     )
 
     parser.add_argument(
@@ -90,7 +90,7 @@ def load_observed_behavior(input_file: str) -> List[str]:
     """
     try:
         with open(input_file, "r") as f:
-            observed_behavior = [line.strip() for line in f]
+            observed_behavior = [line.strip() for line in f if line.strip()]
         logging.info(f"Successfully loaded {len(observed_behavior)} observed behaviors from {input_file}")
         return observed_behavior
     except FileNotFoundError:
@@ -227,9 +227,18 @@ def main():
         logging.getLogger().setLevel(logging.DEBUG)
         logging.debug("Debug mode enabled.")
 
+    output_resolved = os.path.realpath(args.output_file)
+    if output_resolved in {os.path.realpath(args.input_file), os.path.realpath(args.config_file)}:
+        logging.error("Output file must not be the input file or the config file.")
+        sys.exit(1)
+
     try:
         # 1. Load Observed Behavior
         observed_behavior = load_observed_behavior(args.input_file)
+
+        if not observed_behavior:
+            logging.error("Nothing generated: the input file has no entries.")
+            sys.exit(1)
 
         # 2. Load Configuration
         config = load_config(args.config_file)
@@ -239,6 +248,13 @@ def main():
 
         # 4. Generate Permission Whitelist
         permission_whitelist = generate_permission_whitelist(filtered_behavior)
+
+        if not permission_whitelist["allowed_paths"]:
+            if not config.get("whitelists"):
+                logging.error("Nothing generated: the config has no whitelist keys, so no line can be allowed. An empty allowed_paths list is not written.")
+            else:
+                logging.error("Nothing generated: no input lines matched the whitelist patterns. An empty allowed_paths list is not written.")
+            sys.exit(1)
 
         # 5. Output
         print_whitelist_rich(permission_whitelist)  # Print to console
