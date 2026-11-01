@@ -90,6 +90,7 @@ def load_observed_behavior(input_file: str) -> List[str]:
     """
     try:
         with open(input_file, "r") as f:
+            # I strip every line and drop the blank ones here, so matching later never sees leading spaces or a trailing tab. A behavior line that really contains those characters is changed before any pattern gets a say.
             observed_behavior = [line.strip() for line in f if line.strip()]
         logging.info(f"Successfully loaded {len(observed_behavior)} observed behaviors from {input_file}")
         return observed_behavior
@@ -144,12 +145,14 @@ def filter_observed_behavior(observed_behavior: List[str], config: Dict) -> List
     blacklists = config.get("blacklists", [])
 
     # Compile whitelist patterns
+    # These are gitwildmatch patterns, with git path rules, not plain substrings or shell globs. A pattern with no slash in it matches a file name at any depth, which catches callers out when a short pattern allows far more than the one folder they meant.
     whitelist_spec = pathspec.PathSpec.from_lines("gitwildmatch", whitelists)
     blacklist_spec = pathspec.PathSpec.from_lines("gitwildmatch", blacklists)
 
 
     filtered_behavior = []
     for behavior in observed_behavior:
+        # Blacklist goes first and wins ties. A line named in both lists is dropped, which is the safer reading of a config that contradicts itself, and the whitelist check below never even sees it.
         if blacklist_spec.match_file(behavior):
             logging.debug(f"Behavior '{behavior}' matched blacklist, skipping.")
             continue  # Skip if matches a blacklist pattern. Prevents items in both lists from being allowed.
@@ -177,6 +180,7 @@ def generate_permission_whitelist(filtered_behavior: List[str]) -> Dict:
     # Basic implementation: Just returns the unique set of file paths.
     #  This could be extended to analyze the paths and group them or assign permissions.
 
+    # Deduping through a set throws away how often a line appeared. Frequency in the input might say which paths a program leans on most, and this output cannot show it, it only keeps the sorted survivors.
     permission_whitelist = {"allowed_paths": sorted(list(set(filtered_behavior)))} #remove duplicates, sort list
 
     logging.info(f"Generated permission whitelist with {len(permission_whitelist['allowed_paths'])} entries.")
@@ -227,6 +231,7 @@ def main():
         logging.getLogger().setLevel(logging.DEBUG)
         logging.debug("Debug mode enabled.")
 
+    # This check runs before either input is loaded, and it resolves links, so pointing the output at the config through a symlink is refused too. Writing the result over the rules that produced it would destroy the record of why those paths were allowed.
     output_resolved = os.path.realpath(args.output_file)
     if output_resolved in {os.path.realpath(args.input_file), os.path.realpath(args.config_file)}:
         logging.error("Output file must not be the input file or the config file.")
@@ -250,6 +255,7 @@ def main():
         permission_whitelist = generate_permission_whitelist(filtered_behavior)
 
         if not permission_whitelist["allowed_paths"]:
+            # I separate the two empty outcomes because they need different fixes. No whitelist keys at all is a config shape problem, while keys that matched nothing is a pattern problem, and one message for both sent people hunting in the wrong file.
             if not config.get("whitelists"):
                 logging.error("Nothing generated: the config has no whitelist keys, so no line can be allowed. An empty allowed_paths list is not written.")
             else:
@@ -259,6 +265,7 @@ def main():
         # 5. Output
         print_whitelist_rich(permission_whitelist)  # Print to console
 
+        # Simulate still prints the full table to the console. It only skips the file write, so a dry run is not a private run, and anyone watching the terminal sees the same paths the file would hold.
         if not args.simulate:
             save_permission_whitelist(permission_whitelist, args.output_file)
         else:
