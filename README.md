@@ -2,12 +2,15 @@
 Filters lines from a behavior file the operator supplies against patterns from a config file, and writes the kept lines as a JSON allowed_paths list. It performs no observation or monitoring: there is no monitoring period, no system call capture, and no file access capture. The input file is plain text with one line per entry, for example one file path per line. Blacklist patterns take precedence over whitelist patterns, and the result is deduplicated and sorted. - Focused on Tools for analyzing and assessing file system permissions
 
 ## Install
-`git clone https://github.com/ShadowGuardAI/pa-permission-whitelist-generator`
+`git clone https://github.com/ShadowGuard-AI/pa-permission-whitelist-generator`
+`pip install -r requirements.txt`
 
 ## Usage
-`python3 main.py [params]`
+`python3 main.py -i FILE [-o FILE] [-c FILE] [-d] [-s]`
 
-The config file is JSON and is required; it defaults to `config.json` in the current directory. It must hold a `whitelists` key with the patterns a line must match to be kept; a `blacklists` key is optional and its matches are dropped even when they also match the whitelist. Example config, also shipped as `config.example.json`:
+`-i` is required. All other options are optional.
+
+The config file is JSON. `--config` defaults to `config.json` in the current directory, and that file must exist and hold valid JSON or the run exits 1. It must hold a `whitelists` key with the patterns a line must match to be kept; a `blacklists` key is optional and its matches are dropped even when they also match the whitelist. Example config, also shipped as `config.example.json`:
 
 ```json
 {
@@ -20,11 +23,11 @@ An input file with no entries, or a result with no allowed paths (for example a 
 
 ## Parameters
 - `-h`: Show help message and exit
-- `-i`, `--input`: Path to the input file containing one behavior line (for example a file path) per line.
-- `-o`, `--output`: Path to the output file to store the generated permission whitelist (default: permission_whitelist.json).
-- `-c`, `--config`: Path to the configuration file containing filtering rules (default: config.json).
-- `-d`, `--debug`: Enable debug mode for more verbose logging.
-- `-s`, `--simulate`: Simulate the whitelist generation without writing to the output file.
+- `-i`, `--input` (required): Path to the input file containing one behavior line (for example a file path) per line.
+- `-o`, `--output` (optional): Path to the output file to store the generated permission whitelist (default: permission_whitelist.json).
+- `-c`, `--config` (optional): Path to the configuration file containing filtering rules (default: config.json).
+- `-d`, `--debug` (optional): Enable debug mode for more verbose logging.
+- `-s`, `--simulate` (optional): Simulate the whitelist generation without writing to the output file.
 
 ## License
-Copyright (c) ShadowGuardAI
+MIT License. See LICENSE.
